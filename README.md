@@ -3,14 +3,14 @@
 ![iris](https://raw.githubusercontent.com/dmarx/Topological-Anomaly-Detection/master/Iris_outlier_graph_small.png)
 
 This script is an implementation of an outlier detection technique described in the paper [Topological Anomaly Detection Performance with
-Multispectral Polarimetric Imagery](http://www.cis.rit.edu/~mxgpci/pubs/gartley-7334-1.pdf) by [Dr. Michael Gartley](http://www.cis.rit.edu/~mxgpci/) (2009). 
+Multispectral Polarimetric Imagery](http://www.cis.rit.edu/~mxgpci/pubs/gartley-7334-1.pdf) (2009) by Drs. [Michael Gartley](http://www.cis.rit.edu/~mxgpci/) and [Bill Basener](http://people.rit.edu/wfbsma/basener.html) from RIT. 
 
 Algorithm
 ----------
 
 The technique is essentially a density based outlier detection algorithm that, instead of calculating local densities, constructs a graph
 of the data using nearest-neighbors. The algorithm is different from traditional kNN outlier detection algorithms in that instead of setting 'k' as a
-parameter, you instead set a maximal inter-observation distance (called the graph "resolution" by Gartley). If the distance between two points is less 
+parameter, you instead set a maximal inter-observation distance (called the graph "resolution" by Gartley and Basener). If the distance between two points is less 
 than the graph resolution, add an edge between those two observations to the graph. Once the full graph is constructed, determine which connected 
 components comprise the "background" of the data by setting some threshold percentage of observations 'p': any components with fewer than 'p' observations 
 is considered an anomalous component, and all the observations (nodes) in this component are outliers. 

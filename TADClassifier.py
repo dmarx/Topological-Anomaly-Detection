@@ -1,5 +1,5 @@
 """
-Topological Anomaly Detection per Gartley (2009):
+Topological Anomaly Detection per Gartley and Basener (2009):
 
     http://www.cis.rit.edu/~mxgpci/pubs/gartley-7334-1.pdf
     
