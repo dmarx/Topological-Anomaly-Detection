@@ -8,12 +8,15 @@ Multispectral Polarimetric Imagery](http://www.cis.rit.edu/~mxgpci/pubs/gartley-
 Algorithm
 ----------
 
-In essence, the technique is essentially a density based outlier detection algorithm that, instead of calculating local densities, constructs a graph
+The technique is essentially a density based outlier detection algorithm that, instead of calculating local densities, constructs a graph
 of the data using nearest-neighbors. The algorithm is different from traditional kNN outlier detection algorithms in that instead of setting 'k' as a
 parameter, you instead set a maximal inter-observation distance (called the graph "resolution" by Gartley). If the distance between two points is less 
 than the graph resolution, add an edge between those two observations to the graph. Once the full graph is constructed, determine which connected 
 components comprise the "background" of the data by setting some threshold percentage of observations 'p': any components with fewer than 'p' observations 
 is considered an anomalous component, and all the observations (nodes) in this component are outliers. 
+
+The only tuning parameters are 'r' and 'p'. The default for 'p' is based on the recommendation in the Gartley paper, but there's no recommended heursitic for
+constructing 'r' so I just set it to a value that seems to work (the 10th percentile distance of the adjacency matrix).
 
 Requires
 --------
@@ -22,7 +25,7 @@ Requires
 * pandas
 * scipy
 
-The pandas requirement is just a convenience to return the outlier scores as a pandas.Series. To break this requirement, modify the return value of `calculate_anomaly_scores` 
+The pandas requirement is just a convenience to return the outlier scores as a `pandas.Series`. To break this requirement, modify the return value of `calculate_anomaly_scores` 
 to just return the `scores` variable (a dict) instead of wrapping it in a pandas.Series.
 
 Usage
