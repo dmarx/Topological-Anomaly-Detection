@@ -11,7 +11,7 @@ License: BSD-3
 
 from __future__ import division
 import numpy as np
-from scipy.spatial.distance import pdist, euclidean
+from scipy.spatial.distance import pdist
 from itertools import combinations
 import networkx as nx
 import copy
