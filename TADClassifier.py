@@ -6,6 +6,7 @@ Topological Anomaly Detection per Gartley (2009):
 Author: David Marx
 Date: 8/3/2014
 Version: 1.0
+License: BSD-3
 """
 
 from __future__ import division
