@@ -14,7 +14,6 @@ import numpy as np
 from scipy.spatial.distance import pdist
 from itertools import combinations
 import networkx as nx
-import copy
 import pandas as pd
 
 def trim_adjacency_matrix(adj, r=None, rq=.1):
