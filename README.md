@@ -1,6 +1,6 @@
 # Topological Anomaly Detection (TAD)
 
-![iris](https://raw.githubusercontent.com/dmarx/topological_anomaly_detection/master/Iris_outlier_graph_small.png)
+![iris](https://raw.githubusercontent.com/dmarx/Topological-Anomaly-Detection/master/Iris_outlier_graph_small.png)
 
 This script is an implementation of an outlier detection technique described in the paper [Topological Anomaly Detection Performance with
 Multispectral Polarimetric Imagery](http://www.cis.rit.edu/~mxgpci/pubs/gartley-7334-1.pdf) by [Dr. Michael Gartley](http://www.cis.rit.edu/~mxgpci/) (2009). 
