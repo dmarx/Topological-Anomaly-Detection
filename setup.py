@@ -8,7 +8,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.md')).read()
 
 setup(name='tad',
-      version='1.0',
+      version='0.1',
       description='Topological Anomaly Detection (TAD)',
       long_description=README,
       author='David Marx',

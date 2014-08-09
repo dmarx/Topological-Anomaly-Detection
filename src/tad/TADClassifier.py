@@ -5,7 +5,7 @@ Topological Anomaly Detection per Gartley and Basener (2009):
     
 Author: David Marx
 Date: 8/3/2014
-Version: 1.0
+Version: 0.1
 License: BSD-3
 """
 
