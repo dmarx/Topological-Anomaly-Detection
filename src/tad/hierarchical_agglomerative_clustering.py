@@ -111,7 +111,7 @@ def calculate_anomaly_scores(outliers, adj, n):
     return pd.Series(scores)
     
     
-def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True):
+def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -139,8 +139,14 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True):
     d_ij = d_ij[dx.argsort(),:] # order by distance
     
     k=0 # counter for the number of break points
-    assignments = np.empty((n,n)) #max number of breaks=n
-    assignments[k,:] = range(n)
+    
+    if track_assignments:
+        assignments = np.empty((n,n)) #max number of breaks=n
+        assignments[k,:] = range(n)
+    else:
+        if percentile is None:
+            raise Exception("Either specify a target percentile, or enable assignment tracking.")
+        assignments = None
     
     
     count_n0_vs_r = {0:n} # {k:v}-> r:count of obs in V
@@ -163,7 +169,9 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True):
             if r_nclust[-1][1] > nclust: # test that the number of clusters has changed as we update graph resolution
                 r_nclust.append([r, nclust])
                 k+=1
-                assignments[k,:] = assign_observations(clust)
+                assign_k = assign_observations(clust)
+                if track_assignments:
+                    assignments[k,:] = assign_k
                 
                 if percentile: 
                     outlier_clusters, count_n0 = count_outliers(clust, cutoff)
@@ -172,20 +180,20 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True):
                     if outlier_clusters:
                         break
         last_d = d
-    assignments = assignments[:k+1, :] # Trim out unused rows
+    if track_assignments:
+        assignments = assignments[:k+1, :] # Trim out unused rows
     
     # flag outliers
     outliers=None
     if percentile:
-        last_assign = assignments[k,:]
+        #last_assign = assignments[k,:]
+        last_assign = assign_k
         # There's probably a more vectorized way to do this
         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
         
     scores = calculate_anomaly_scores(outliers, dx, n)
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
-
-
     
 if __name__ == '__main__':
     import pandas as pd
