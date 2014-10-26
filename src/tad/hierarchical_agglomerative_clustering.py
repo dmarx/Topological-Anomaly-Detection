@@ -12,8 +12,8 @@ import copy
 from itertools import combinations
 import networkx as nx
 import numpy as np
-from scipy.spatial.distance import pdist
-from sklearn import datasets
+from scipy.spatial.distance import pdist, squareform
+import pandas as pd
 
 # I'm building this up from scratch, but I could probably just use 
 #   scipy.cluster.hierarchy.linkage
@@ -89,7 +89,9 @@ def count_outliers(clusters, cutoff=0):
     
     return outlier_clusters, count_n0
     
-def calculate_anomaly_scores(outliers, adj, n):
+# At present, this implementation is actually really stupid slow.
+# .560, somehow better than the other version I've got
+def calculate_anomaly_scores_SLOW(outliers, adj, n):
     """
     The "anomalous-ness" of an anomaly is the distance between that 
     observation and the nearest background component, i.e. the distance to the
@@ -110,8 +112,75 @@ def calculate_anomaly_scores(outliers, adj, n):
                     scores[a] = d
     return pd.Series(scores)
     
+# Faster anomaly scoring
+
+import numpy as np
+from itertools import combinations, chain
+from scipy.misc import comb
+
+def comb_index(n, k):
+    """
+    Via http://stackoverflow.com/questions/16003217/n-d-version-of-itertools-combinations-in-numpy
+    """
+    count = comb(n, k, exact=True)
+    index = np.fromiter(chain.from_iterable(combinations(range(n), k)), 
+                        int, count=count*k)
+    return index.reshape(-1, k)
+
+    #1.381 seconds
+def calculate_anomaly_scores_SLOW2(outliers, adj, n):
+    """
+    The "anomalous-ness" of an anomaly is the distance between that 
+    observation and the nearest background component, i.e. the distance to the
+    nearest non-anomaly observation. Scores are returned as a pandas.Series
+    """
+    scores = {}
+    for z, ij in enumerate(combinations(range(n),2)):
+        i,j = ij
+        i_outl = False
+        if i in outliers:
+            a = i
+            i_outl = True
+        if j in outliers:
+            if i_outl:
+                continue
+            a = j
+        d = adj[z]
+        if scores.has_key(a):
+            scores[a] = np.min([scores[a], d])
+        else:
+            scores[a] = d
+    return pd.Series(scores)
     
-def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False):
+### The bottle neck here is the np.min call ###
+# Alternate scoring method:
+#   1. convert the distance matrix into an array of [i,j,d] rows.
+#   2. drop all records where d < graph_resolution
+#   3. sort on d
+#   4. iterate through records, setting the score for each outlier to the first value
+#      in the array where that outlier is compared to a non-outlier
+
+
+### Alternative 2 ###
+# Vectorize that shit!
+# 1. squareform dx into a matrix
+# 2. Dump columns that correspond to outliers
+# 3. select out outlier rows
+# 4. calculate the min along each row.
+# 5. Profit.
+# .010 seconds
+#def calculate_anomaly_scores_VECTORIZED(outliers, adj, n):
+def calculate_anomaly_scores(outliers, adj, n):
+    mat = squareform(adj)
+    #inliers = adj.index.difference(outliers)
+    m = mat.shape[0]
+    inliers = np.setdiff1d( range(m), outliers)
+    s1 = mat[inliers,:]
+    return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
+    
+    
+    
+def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -191,13 +260,17 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
         # There's probably a more vectorized way to do this
         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
         
-    scores = calculate_anomaly_scores(outliers, dx, n)
+    if score:
+        scores = calculate_anomaly_scores(outliers, dx, n)
+    else:
+        scores=None
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
     
 if __name__ == '__main__':
     import pandas as pd
     import matplotlib.pyplot as plt
+    from sklearn import datasets
     iris = datasets.load_iris()
     X = iris.data
     test = hclust_outliers(X)
@@ -208,3 +281,5 @@ if __name__ == '__main__':
     stats = pd.Series(test['count_n0_vs_r'])
     stats.plot()
     plt.show()
+    
+    # 173.266 sec
