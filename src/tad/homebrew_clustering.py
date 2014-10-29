@@ -3,6 +3,9 @@
 # Overarching goal: design intelligent classes tailored for agglomerative clustering.
 
 import itertools
+from collections import Counter
+import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
 # Classes for building and merging clusters. 
 
@@ -13,14 +16,16 @@ class Clusters(object):
     attribute takes and index as input and returns a ClusterPointer to the 
     appropriate cluster, so Clusters().datamap[ix].cluster gives the actual
     cluster object that datum is currently assigned to. Merging clusters updates
-    the cluster object assigned to a given pointer. The .clusters 
+    the cluster object assigned to a given pointer. The .clusters attribute is 
+    a list of active cluster ids pointing to cluster objects such that 
+    len(Clusters.clusters) = len(Clusters.size).
     """
-    def __init__(self, data):
+    def __init__(self, n):
         self.id_sequence = itertools.count()
-        self.data = data
+        self.n = n # number of terminal leaves
         self.datamap = {}
         self.clusters = {}
-        for ix in range(data.shape[0]):
+        for ix in range(n):
             pointer = ClusterPointer([ix],self)
             self.datamap[ix] = pointer
             self.clusters[ix] = pointer.cluster
@@ -29,12 +34,15 @@ class Clusters(object):
         Takes two clusters as input. If they aren't pointing to the 
         same cluster, merges the two clusters and updates the one of the 
         pointers so it's no longer pointing to a deprecated cluster.
+        
+        Returns a boolean to indicate whether or not a merge action was taken or not
         """
         if a.cluster.id == b.cluster.id: # Would it be faster to just do a.cluster==b.cluster or something like that?
-            return
+            return False
         a.cluster.merge(b.cluster)
         self.clusters.pop(b.cluster.id)
         b.cluster = a.cluster
+        return True
     def merge_clusters_by_id(self, ix1, ix2):
         """
         Takes to data indices as input, merges the clusters they are currently
@@ -42,7 +50,7 @@ class Clusters(object):
         """
         a = self.datamap[ix1]
         b = self.datamap[ix2]
-        self.merge_clusters(a,b)
+        return self.merge_clusters(a,b)
     @property
     def size(self):
         """
@@ -78,3 +86,80 @@ class Cluster(object):
     def __len__(self):
         return self._len # only update this when values list is grown
         
+def flag_outliers(clusters, perc):    
+    n = clusters.n
+    threshhold = np.floor(n*perc)
+    clust_size = Counter(clusters.size)
+    outliers_count = 0
+    outliers = False
+    for size, count in clust_size:
+        n_obs = size*count
+        outliers_count += n_obs
+        if outliers_count < threshhold:
+            outliers = True
+        else: 
+            break
+    #outlier_clusters = []
+    outlier_observations = []
+    if outliers:
+        for id, clust in clusters.clusters.iteritems():
+            if clust.size < size:
+                #outlier_clusters.append(id)
+                outlier_observations.extend(clust.values)
+    return outlier_observations
+        
+def score_outliers(outliers, dx):
+    mat = squareform(dx)
+    m = mat.shape[0]
+    inliers = np.setdiff1d( range(m), outliers)
+    s1 = mat[inliers,:]
+    return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
+        
+clusters = None
+        
+def hclust_tad(data, method='euclidean', perc=.05, score=True):
+    """
+    Performs hierarchical clustering on the input data to identify 
+    outlier observations.
+    """
+    n = X.shape[0]
+    dx = pdist(X, method)    
+    ix = np.array([ij for ij in itertools.combinations(range(n),2)])
+    d_ij = np.hstack((dx[:,None], ix)) # append edgelist
+    d_ij = d_ij[dx.argsort(),:] # order by distance
+        
+    global clusters
+    clusters = Clusters(n)
+    
+    last_d = 0
+    r = 0 # graph resolution
+    merged = False
+    for dij in d_ij:        
+        d,i,j = dij 
+        print i,j ###########################
+        if last_d != d:
+            r = d
+            if merged: # test if number of clusters has changed since last modification to graph resolution
+                merged = False # reset for new graph resolution
+                outliers = flag_outliers(clusters, perc)
+                if outliers:
+                    break
+                    
+        # Add an edge to the graph (i.e. merge clusters as necessary)
+        merged_this_iter = clusters.merge_clusters_by_id(i,j)
+        merged = merged or merged_this_iter    
+    
+    scores = None
+    if score:
+        scores = score_outliers(outliers, dx)
+    
+    return {'outliers':outliers, 'scores':scores, 'clusters':clusters, 'graph_resolution':r}
+    
+if __name__ == '__main__':
+    from sklearn import datasets
+    import time
+    X = datasets.load_iris().data
+    start = time.time()
+    test = hclust_tad(X)
+    print "Elapsed: {t}".format(t=time.time()-start)
+    
