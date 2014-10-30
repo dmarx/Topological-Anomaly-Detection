@@ -178,6 +178,14 @@ def calculate_anomaly_scores(outliers, adj, n):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
     
+def calculate_anomaly_scores_from_matrix(outliers, mat, n):
+    #mat = squareform(adj)
+    #inliers = adj.index.difference(outliers)
+    m = mat.shape[0]
+    inliers = np.setdiff1d( range(m), outliers)
+    s1 = mat[inliers,:]
+    return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
+    
 def comb_index(n, k):
     """
     via http://stackoverflow.com/questions/16003217/n-d-version-of-itertools-combinations-in-numpy
@@ -269,7 +277,7 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
         
     if score:
-        scores = calculate_anomaly_scores(outliers, dx, n)
+        scores = calculate_anomaly_scores_from_matrix(outliers, mat, n)
     else:
         scores=None
     
@@ -305,8 +313,9 @@ def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, tr
     #d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     #d_ij = d_ij[dx.argsort(),:] # order by distance
     mat = squareform(dx)
+    mat[np.triu_indices(n)] = np.NaN # nuke the upper triangle, including diagonal
     unq_dx = np.unique(dx)
-    unq_dx .sort()
+    unq_dx.sort()
     
     k=0 # counter for the number of break points
     
@@ -331,8 +340,10 @@ def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, tr
         cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
     for d in unq_dx :
         r = d
+        #print d
         block = np.where(mat==d)
-        for i,j in block:
+        #print block
+        for i,j in zip(*block): # there may be a more efficient way of doing this
             if i==j:
                 continue
             g.add_edge(i,j)
