@@ -6,6 +6,7 @@ import itertools
 from collections import Counter
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+#import gc
 
 # Classes for building and merging clusters. 
 
@@ -19,12 +20,11 @@ class Clusters(object):
     the clusters to which they are assigned.
     """
     def __init__(self, n):
-        self.id_sequence = itertools.count()
         self.n = n # number of terminal leaves
         self.datamap = {}
         self.clusters = {}
         for ix in range(n):
-            cluster = Cluster([ix], self)
+            cluster = Cluster([ix], ix)
             self.datamap[ix] = cluster
             self.clusters[ix] = cluster
     def merge_clusters(self,a,b):
@@ -61,15 +61,13 @@ class Cluster(object):
     """
     Implement a single "cluster" which can be merged with other clusters    
     """
-    __slots__ = ['parent','values','id','size']
-    def __init__(self, values, parent):
+    __slots__ = ['values','id','size']
+    def __init__(self, values, id):
         """
-        Parent should be an instance of class Clusters.
         Values should be a list of indexes to be assigned to the cluster. 
-        Normally, values will be a list of length one.
+        Normally, values will be a list of length one (i.e. containing 'id').
         """
-        self.parent = parent
-        self.id = parent.id_sequence.next()
+        self.id = id
         self.values = values
         self.size = len(self.values)
     def merge(self, cluster):
