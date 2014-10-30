@@ -275,6 +275,101 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
     
+    
+
+def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True):
+    """
+    Agglomerative hierarchical clustering for outlier analysis. Constructs the
+    the hierarchy incrementally. At each break, tests to see how many 
+    observations would be labeled as outliers if we stopped at that break. If
+    the number is below the threshold, the algorithm can optionally stop before
+    constructing the full hierarchical tree.
+    
+    Inputs:
+        X: Input data
+        percentile: Upper bound on percent of observations to be flagged as outliers. 
+            if percentile is None, returns the full hierarchy and doesn't flag outliers.
+        method: method for calculating distances (passed to pdist). In 
+            scipy.cluster.hierarchy.linkage language, this function currently only supports
+            "single" linkage (Nearest Point Algorithm) for agglomerating clusters.
+    """
+        
+    # initialize an unconnected graph
+    n=X.shape[0]
+    g = nx.Graph()
+    g.add_nodes_from(range(n))
+    
+    dx = pdist(X, method)    
+    #ix = np.array([ij for ij in combinations(range(n),2)]) # this call is causing memory to explode
+    #ix = comb_index(n,2)
+    #d_ij = np.hstack((dx[:,None], ix)) # append edgelist
+    #d_ij = d_ij[dx.argsort(),:] # order by distance
+    mat = squareform(dx)
+    unq_dx = np.unique(dx)
+    unq_dx .sort()
+    
+    k=0 # counter for the number of break points
+    
+    if track_assignments:
+        assignments = np.empty((n,n)) #max number of breaks=n
+        assignments[k,:] = range(n)
+    else:
+        if percentile is None:
+            raise Exception("Either specify a target percentile, or enable assignment tracking.")
+        assignments = None
+    
+    
+    count_n0_vs_r = {0:n} # {k:v}-> r:count of obs in V
+    
+    # Incrementally add edges to the graph to determine clustering
+    r=0 # current graph resolution
+    last_d = 0 # prior observed 'd'
+    nclust = n # number of components on initialization
+    r_nclust = [] # list of tuples, giving the graph resolution and number of clusters at each split
+    r_nclust.append([r,nclust])
+    if percentile:
+        cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
+    for d in unq_dx :
+        r = d
+        block = np.where(mat==d)
+        for i,j in block:
+            if i==j:
+                continue
+            g.add_edge(i,j)
+        clust  = nx.connected_components(g)
+        nclust = len(clust)
+        if r_nclust[-1][1] > nclust: # test that the number of clusters has changed as we update graph resolution
+            r_nclust.append([r, nclust])
+            k+=1
+            assign_k = assign_observations(clust)
+            if track_assignments:
+                assignments[k,:] = assign_k
+            
+            if percentile: 
+                outlier_clusters, count_n0 = count_outliers(clust, cutoff)
+                if track_stats:
+                    count_n0_vs_r[k] = count_n0
+                if outlier_clusters:
+                    break      
+        
+    if track_assignments:
+        assignments = assignments[:k+1, :] # Trim out unused rows
+    
+    # flag outliers
+    outliers=None
+    if percentile:
+        #last_assign = assignments[k,:]
+        last_assign = assign_k
+        # There's probably a more vectorized way to do this
+        outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
+        
+    if score:
+        scores = calculate_anomaly_scores(outliers, dx, n)
+    else:
+        scores=None
+    
+    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
+    
 if __name__ == '__main__':
     import pandas as pd
     import matplotlib.pyplot as plt

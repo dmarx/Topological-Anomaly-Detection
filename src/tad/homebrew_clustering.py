@@ -113,6 +113,16 @@ def comb_index(n, k):
                         int, count=count*k)
     return index.reshape(-1, k)
         
+def combs_nd(a, r, axis=0):
+    a = np.asarray(a)
+    if axis < 0:
+        axis += a.ndim
+    indices = np.arange(a.shape[axis])
+    dt = np.dtype([('', np.intp)]*r)
+    indices = np.fromiter(combinations(indices, r), dt)
+    indices = indices.view(np.intp).reshape(-1, r)
+    return np.take(a, indices, axis=axis)
+        
 def hclust_tad(X, method='euclidean', perc=.05, score=True):
     """
     Performs hierarchical clustering on the input data to identify 
@@ -123,6 +133,7 @@ def hclust_tad(X, method='euclidean', perc=.05, score=True):
     #ix = np.array([ij for ij in itertools.combinations(range(n),2)])
     #ix = cartesian((np.arange(n), np.arange(n))) # incorrect dimensions, doesn't respect ordering
     ix = comb_index(n,2)
+    #ix = combs_nd(np.arange(n),2)
     d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     d_ij = d_ij[dx.argsort(),:] # order by distance
         
