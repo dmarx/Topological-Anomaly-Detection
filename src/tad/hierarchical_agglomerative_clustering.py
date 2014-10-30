@@ -182,9 +182,10 @@ def calculate_anomaly_scores_from_matrix(outliers, mat, n):
     #mat = squareform(adj)
     #inliers = adj.index.difference(outliers)
     m = mat.shape[0]
-    inliers = np.setdiff1d( range(m), outliers)
-    s1 = mat[inliers,:]
-    return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
+    inliers = np.setdiff1d( range(m), outliers)    
+    #s1 = mat[:,outliers] # this should just be a view onto the array, but fancy indexing returns a copy, so indexing on the smaller index gives a smaller result
+    #return s1[inliers,:].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
+    return mat[inliers.reshape(-1,1), outliers].min(axis=0)
     
 def comb_index(n, k):
     """
@@ -284,8 +285,9 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
     
     
+    
 
-def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True):
+def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, debug_pauses=False):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -301,21 +303,49 @@ def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, tr
             scipy.cluster.hierarchy.linkage language, this function currently only supports
             "single" linkage (Nearest Point Algorithm) for agglomerating clusters.
     """
-        
+    if debug_pauses:
+        import time
+        start = time.time()
+    
     # initialize an unconnected graph
     n=X.shape[0]
     g = nx.Graph()
     g.add_nodes_from(range(n))
     
     dx = pdist(X, method)    
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Distance matrix constructed in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
     #ix = np.array([ij for ij in combinations(range(n),2)]) # this call is causing memory to explode
     #ix = comb_index(n,2)
     #d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     #d_ij = d_ij[dx.argsort(),:] # order by distance
     mat = squareform(dx)
     mat[np.triu_indices(n)] = np.NaN # nuke the upper triangle, including diagonal
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Sqaureform conversion completed in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+       
     unq_dx = np.unique(dx)
     unq_dx.sort()
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Distance matrix sorted in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
+    if not distances:        
+        dx=None
+        import gc
+        gc.collect()
+        if debug_pauses:
+            raw_input("dx object flushed. Press enter to continue.")
+            start=time.time()
     
     k=0 # counter for the number of break points
     
@@ -366,6 +396,11 @@ def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, tr
     if track_assignments:
         assignments = assignments[:k+1, :] # Trim out unused rows
     
+    if debug_pauses:
+        end = time.time()
+        raw_input("Main algorithm completed in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
     # flag outliers
     outliers=None
     if percentile:
@@ -374,10 +409,20 @@ def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, tr
         # There's probably a more vectorized way to do this
         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
         
+    if debug_pauses:
+        end = time.time()
+        raw_input("Outliers flagged in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+        
     if score:
-        scores = calculate_anomaly_scores(outliers, dx, n)
+        scores = calculate_anomaly_scores_from_matrix(outliers, mat, n)
     else:
         scores=None
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Outliers scored in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
     
