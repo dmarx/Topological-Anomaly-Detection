@@ -178,8 +178,6 @@ def calculate_anomaly_scores(outliers, adj, n):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
     
-edges_old = []
-    
 def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
@@ -229,9 +227,7 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     if percentile:
         cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
     for dij in d_ij:
-        #edges_old.append(dij)
         d,i,j = dij
-        #g.add_edge(i,j)
         if d != last_d: # test that we have gone through all observations for a particular graph resolution
             r = d
             clust  = nx.connected_components(g)

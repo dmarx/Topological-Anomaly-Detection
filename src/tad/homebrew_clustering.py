@@ -102,13 +102,10 @@ def flag_outliers(clusters, perc):
             outliers = True
         else: 
             break
-    #outlier_clusters = []
     outlier_observations = []
     if outliers:
         for id, clust in clusters.clusters.iteritems():
-            #if clust.size < size:
             if len(clust) < size:
-                #outlier_clusters.append(id)
                 outlier_observations.extend(clust.values)
     return outlier_observations
         
@@ -118,9 +115,6 @@ def score_outliers(outliers, dx):
     inliers = np.setdiff1d( range(m), outliers)
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
-        
-#clusters = None
-edges_homebrew = []
         
 def hclust_tad(data, method='euclidean', perc=.05, score=True):
     """
@@ -133,16 +127,13 @@ def hclust_tad(data, method='euclidean', perc=.05, score=True):
     d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     d_ij = d_ij[dx.argsort(),:] # order by distance
         
-    #global clusters
     clusters = Clusters(n)
     
     last_d = 0
     r = 0 # graph resolution
     merged = False
     for dij in d_ij:  
-        edges_homebrew.append(dij) ###########################
         d,i,j = dij 
-        #print i,j, d ###########################
         if last_d != d:
             r = d
             if merged: # test if number of clusters has changed since last modification to graph resolution
