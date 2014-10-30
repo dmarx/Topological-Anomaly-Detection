@@ -12,13 +12,11 @@ from scipy.spatial.distance import pdist, squareform
 class Clusters(object):
     """
     Parent class. Upon initializaiton, takes data as input, assigns each datum 
-    (by index) to a unique cluster. Clusters can be merged efficiently. datamap 
-    attribute takes and index as input and returns a ClusterPointer to the 
-    appropriate cluster, so Clusters().datamap[ix].cluster gives the actual
-    cluster object that datum is currently assigned to. Merging clusters updates
+    (by index) to a unique cluster. Clusters can be merged efficiently. Merging clusters updates
     the cluster object assigned to a given pointer. The .clusters attribute is 
     a list of active cluster ids pointing to cluster objects such that 
-    len(Clusters.clusters) = len(Clusters.size).
+    len(Clusters.clusters) = len(Clusters.size). The datamap attribute maps data indices to 
+    the clusters to which they are assigned.
     """
     def __init__(self, n):
         self.id_sequence = itertools.count()
@@ -26,24 +24,23 @@ class Clusters(object):
         self.datamap = {}
         self.clusters = {}
         for ix in range(n):
-            pointer = ClusterPointer([ix],self)
-            self.datamap[ix] = pointer
-            self.clusters[ix] = pointer.cluster
+            cluster = Cluster([ix], self)
+            self.datamap[ix] = cluster
+            self.clusters[ix] = cluster
     def merge_clusters(self,a,b):
         """
-        Takes two cluster pointers as input. If they aren't pointing to the 
+        Takes two cluster objects as input. If they aren't pointing to the 
         same cluster, merges the two clusters and updates the one of the 
         pointers so it's no longer pointing to a deprecated cluster.
         
         Returns a boolean to indicate whether or not a merge action was taken or not
         """
-        if a.cluster.id == b.cluster.id: # Would it be faster to just do a.cluster==b.cluster or something like that?
+        if a.id == b.id: # Would it be faster to just do a==b or something like that?
             return False
-        a.cluster.merge(b.cluster)
-        for ix in b.cluster.values:
+        a.merge(b)
+        for ix in b.values:
             self.datamap[ix]=a
-        self.clusters.pop(b.cluster.id)
-        b.cluster = a.cluster
+        self.clusters.pop(b.id)
         return True
     def merge_clusters_by_id(self, ix1, ix2):
         """
@@ -59,14 +56,6 @@ class Clusters(object):
         Returns a list whose items are the sizes of each individual cluster        
         """
         return [len(c) for c in self.clusters.itervalues()]
-     
-# I thought this would be helpful but it's actually pretty unnecessary
-class ClusterPointer(object):
-    """
-    Points to a cluster object
-    """
-    def __init__(self, values, parent):
-        self.cluster = Cluster(values, parent)
         
 class Cluster(object):
     """
