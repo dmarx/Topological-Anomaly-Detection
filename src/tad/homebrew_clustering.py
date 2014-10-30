@@ -116,7 +116,7 @@ def score_outliers(outliers, dx):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
         
-def hclust_tad(data, method='euclidean', perc=.05, score=True):
+def hclust_tad(X, method='euclidean', perc=.05, score=True):
     """
     Performs hierarchical clustering on the input data to identify 
     outlier observations.

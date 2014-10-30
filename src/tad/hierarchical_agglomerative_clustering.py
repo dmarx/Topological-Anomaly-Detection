@@ -244,8 +244,7 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
                     if track_stats:
                         count_n0_vs_r[k] = count_n0
                     if outlier_clusters:
-                        break
-                edges_old.append(dij)        
+                        break      
         g.add_edge(i,j)
         last_d = d
     if track_assignments:
