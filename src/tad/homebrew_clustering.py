@@ -55,12 +55,13 @@ class Clusters(object):
         """
         Returns a list whose items are the sizes of each individual cluster        
         """
-        return [len(c) for c in self.clusters.itervalues()]
+        return [c.size for c in self.clusters.itervalues()]
         
 class Cluster(object):
     """
     Implement a single "cluster" which can be merged with other clusters    
     """
+    __slots__ = ['parent','values','id','size']
     def __init__(self, values, parent):
         """
         Parent should be an instance of class Clusters.
@@ -70,13 +71,15 @@ class Cluster(object):
         self.parent = parent
         self.id = parent.id_sequence.next()
         self.values = values
-        self._len = len(self.values)
+        #self._len = len(self.values)
+        self.size = len(self.values)
     def merge(self, cluster):
         # if self.id > cluster.id: self.id = cluster.id ## Not really necessary
         self.values.extend(cluster.values)
-        self._len = self._len + len(cluster)
-    def __len__(self):
-        return self._len # only update this when values list is grown
+        #self._len = self._len + len(cluster)
+        self.size = self.size + cluster.size
+    #def __len__(self):
+    #    return self._len # only update this when values list is grown
         
 def flag_outliers(clusters, perc):    
     n = clusters.n
@@ -94,7 +97,8 @@ def flag_outliers(clusters, perc):
     outlier_observations = []
     if outliers:
         for id, clust in clusters.clusters.iteritems():
-            if len(clust) < size:
+            #if len(clust) < size:
+            if clust.size < size:
                 outlier_observations.extend(clust.values)
     return outlier_observations
         
