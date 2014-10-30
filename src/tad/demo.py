@@ -5,10 +5,15 @@ from pandas.tools.plotting import scatter_matrix
 from sklearn import datasets
 from sklearn.decomposition import PCA
 from TADClassifier import tad_classify
+import time
 
 iris = datasets.load_iris()
 df = pd.DataFrame(iris.data)
+start = time.time()
 res = tad_classify(df)
+print "Elapsed: {t}".format(t=time.time()-start)
+
+print res['scores']
 
 df['anomaly']=0
 df.anomaly.ix[res['classed']['anomalies']] = 1

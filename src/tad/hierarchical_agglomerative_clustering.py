@@ -178,7 +178,7 @@ def calculate_anomaly_scores(outliers, adj, n):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
     
-    
+edges_old = []
     
 def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True):
     """
@@ -229,8 +229,9 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     if percentile:
         cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
     for dij in d_ij:
+        #edges_old.append(dij)
         d,i,j = dij
-        g.add_edge(i,j)
+        #g.add_edge(i,j)
         if d != last_d: # test that we have gone through all observations for a particular graph resolution
             r = d
             clust  = nx.connected_components(g)
@@ -248,6 +249,8 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
                         count_n0_vs_r[k] = count_n0
                     if outlier_clusters:
                         break
+                edges_old.append(dij)        
+        g.add_edge(i,j)
         last_d = d
     if track_assignments:
         assignments = assignments[:k+1, :] # Trim out unused rows
@@ -275,11 +278,12 @@ if __name__ == '__main__':
     X = iris.data
     test = hclust_outliers(X)
     
-    # generate a plot for k vs. count(n0) to demonstrate that
-    # when we grow the AGNES tree, count(n0) is non-increasing.
-    # But... is it? Maybe it isn't always,, just here
-    stats = pd.Series(test['count_n0_vs_r'])
-    stats.plot()
-    plt.show()
-    
-    # 173.266 sec
+    if 1==0:
+        # generate a plot for k vs. count(n0) to demonstrate that
+        # when we grow the AGNES tree, count(n0) is non-increasing.
+        # But... is it? Maybe it isn't always,, just here
+        stats = pd.Series(test['count_n0_vs_r'])
+        stats.plot()
+        plt.show()
+        
+        # 173.266 sec

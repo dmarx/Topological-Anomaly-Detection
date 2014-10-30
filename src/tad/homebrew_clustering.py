@@ -31,7 +31,7 @@ class Clusters(object):
             self.clusters[ix] = pointer.cluster
     def merge_clusters(self,a,b):
         """
-        Takes two clusters as input. If they aren't pointing to the 
+        Takes two cluster pointers as input. If they aren't pointing to the 
         same cluster, merges the two clusters and updates the one of the 
         pointers so it's no longer pointing to a deprecated cluster.
         
@@ -40,6 +40,8 @@ class Clusters(object):
         if a.cluster.id == b.cluster.id: # Would it be faster to just do a.cluster==b.cluster or something like that?
             return False
         a.cluster.merge(b.cluster)
+        for ix in b.cluster.values:
+            self.datamap[ix]=a
         self.clusters.pop(b.cluster.id)
         b.cluster = a.cluster
         return True
@@ -58,6 +60,7 @@ class Clusters(object):
         """
         return [len(c) for c in self.clusters.itervalues()]
      
+# I thought this would be helpful but it's actually pretty unnecessary
 class ClusterPointer(object):
     """
     Points to a cluster object
@@ -92,10 +95,10 @@ def flag_outliers(clusters, perc):
     clust_size = Counter(clusters.size)
     outliers_count = 0
     outliers = False
-    for size, count in clust_size:
+    for size, count in clust_size.iteritems():
         n_obs = size*count
         outliers_count += n_obs
-        if outliers_count < threshhold:
+        if outliers_count <= threshhold:
             outliers = True
         else: 
             break
@@ -103,7 +106,8 @@ def flag_outliers(clusters, perc):
     outlier_observations = []
     if outliers:
         for id, clust in clusters.clusters.iteritems():
-            if clust.size < size:
+            #if clust.size < size:
+            if len(clust) < size:
                 #outlier_clusters.append(id)
                 outlier_observations.extend(clust.values)
     return outlier_observations
@@ -115,7 +119,8 @@ def score_outliers(outliers, dx):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
         
-clusters = None
+#clusters = None
+edges_homebrew = []
         
 def hclust_tad(data, method='euclidean', perc=.05, score=True):
     """
@@ -128,15 +133,16 @@ def hclust_tad(data, method='euclidean', perc=.05, score=True):
     d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     d_ij = d_ij[dx.argsort(),:] # order by distance
         
-    global clusters
+    #global clusters
     clusters = Clusters(n)
     
     last_d = 0
     r = 0 # graph resolution
     merged = False
-    for dij in d_ij:        
+    for dij in d_ij:  
+        edges_homebrew.append(dij) ###########################
         d,i,j = dij 
-        print i,j ###########################
+        #print i,j, d ###########################
         if last_d != d:
             r = d
             if merged: # test if number of clusters has changed since last modification to graph resolution
@@ -158,8 +164,21 @@ def hclust_tad(data, method='euclidean', perc=.05, score=True):
 if __name__ == '__main__':
     from sklearn import datasets
     import time
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
     X = datasets.load_iris().data
     start = time.time()
     test = hclust_tad(X)
     print "Elapsed: {t}".format(t=time.time()-start)
     
+    
+    if 1==0:
+        X_pca = PCA().fit_transform(X)
+        colors = []
+        for obs in range(X.shape[0]):
+            if obs in test['outliers']:
+                colors.append('r')
+            else:
+                colors.append('b')
+        plt.scatter(X_pca[:,0],X_pca[:,1], color=colors)
+        plt.show()
