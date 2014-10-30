@@ -187,6 +187,32 @@ def calculate_anomaly_scores_from_matrix(outliers, mat, n):
     #return s1[inliers,:].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
     return mat[inliers.reshape(-1,1), outliers].min(axis=0)
     
+def calculate_anomaly_scores_from_building_up_graph(outliers, unqs, dx, n):
+    """
+    Takes as input the vector of unique distances starting at the first unexplored value.
+    Walks through vector until scores are found for all outliers
+    """
+    #scored = [False]*len(outliers) # list identifying which outliers have been scored
+    scores = [None]*len(outliers)
+    outl_ix = dict((outl, ix) for ix, outl in enumerate(outliers))
+    
+    
+    def update_score(k, d):
+        if k not in outliers:
+            return
+        ix = outl_ix[k]
+        if not scores[ix]:
+            scores[ix] = d
+        
+    for d in unqs:        
+        if all(scores): break
+        for i,j in zip(*row_col_from_condensed_index(n, np.where(dx==d)[0])):
+            if (i in outliers) != (j in outliers):
+                update_score(i, d)
+                update_score(j, d)
+                if all(scores): break
+    return scores
+    
 def comb_index(n, k):
     """
     via http://stackoverflow.com/questions/16003217/n-d-version-of-itertools-combinations-in-numpy
@@ -425,6 +451,147 @@ def hclust_outliers2(X, percentile=.05, method='euclidean', track_stats=True, tr
         start=time.time()
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
+    
+
+def row_col_from_condensed_index(n,ix):
+    b = 1 -2*n
+    x = np.floor((-b - np.sqrt(b**2 - 8*ix))/2)
+    y = ix + x*(b + x + 2)/2 + 1
+    return (x,y)  
+
+
+def hclust_outliers3(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, debug_pauses=False, safe_scoreing=False):
+    """
+    Agglomerative hierarchical clustering for outlier analysis. Constructs the
+    the hierarchy incrementally. At each break, tests to see how many 
+    observations would be labeled as outliers if we stopped at that break. If
+    the number is below the threshold, the algorithm can optionally stop before
+    constructing the full hierarchical tree.
+    
+    Inputs:
+        X: Input data
+        percentile: Upper bound on percent of observations to be flagged as outliers. 
+            if percentile is None, returns the full hierarchy and doesn't flag outliers.
+        method: method for calculating distances (passed to pdist). In 
+            scipy.cluster.hierarchy.linkage language, this function currently only supports
+            "single" linkage (Nearest Point Algorithm) for agglomerating clusters.
+        safe_scoreing: Scoring can be performed quickly by performing a vectorized operation on 
+                        the squareform distance matrix. If memory allocation is potentially 
+                        going to be an issue, construction of the squareform matrix can be avoided
+                        entirely, but the scoring operation will be much, much slower. Way slower.
+                        Like, maybe-not-even-worth-it slower.
+    """
+    if debug_pauses:
+        import time
+        start = time.time()
+    
+    # initialize an unconnected graph
+    n=X.shape[0]
+    g = nx.Graph()
+    g.add_nodes_from(range(n))
+    
+    dx = pdist(X, method)    
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Distance matrix constructed in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
+    #ix = np.array([ij for ij in combinations(range(n),2)]) # this call is causing memory to explode
+    #ix = comb_index(n,2)
+    #d_ij = np.hstack((dx[:,None], ix)) # append edgelist
+    #d_ij = d_ij[dx.argsort(),:] # order by distance
+   
+    unq_dx = np.unique(dx)
+    unq_dx.sort()
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Distance matrix sorted in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
+    k=0 # counter for the number of break points
+    
+    if track_assignments:
+        assignments = np.empty((n,n)) #max number of breaks=n
+        assignments[k,:] = range(n)
+    else:
+        if percentile is None:
+            raise Exception("Either specify a target percentile, or enable assignment tracking.")
+        assignments = None
+    
+    
+    count_n0_vs_r = {0:n} # {k:v}-> r:count of obs in V
+    
+    # Incrementally add edges to the graph to determine clustering
+    r=0 # current graph resolution
+    last_d = 0 # prior observed 'd'
+    nclust = n # number of components on initialization
+    r_nclust = [] # list of tuples, giving the graph resolution and number of clusters at each split
+    r_nclust.append([r,nclust])
+    if percentile:
+        cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
+    for d in unq_dx :
+        r = d
+        #print d
+        for i,j in zip(*row_col_from_condensed_index(n, np.where(dx==d)[0])):
+        #print block
+        #for i,j in zip(*block): # there may be a more efficient way of doing this
+            if i==j:
+                continue
+            g.add_edge(i,j)
+        clust  = nx.connected_components(g)
+        nclust = len(clust)
+        if r_nclust[-1][1] > nclust: # test that the number of clusters has changed as we update graph resolution
+            r_nclust.append([r, nclust])
+            k+=1
+            assign_k = assign_observations(clust)
+            if track_assignments:
+                assignments[k,:] = assign_k
+            
+            if percentile: 
+                outlier_clusters, count_n0 = count_outliers(clust, cutoff)
+                if track_stats:
+                    count_n0_vs_r[k] = count_n0
+                if outlier_clusters:
+                    break      
+        
+    if track_assignments:
+        assignments = assignments[:k+1, :] # Trim out unused rows
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Main algorithm completed in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
+    # flag outliers
+    outliers=None
+    if percentile:
+        #last_assign = assignments[k,:]
+        last_assign = assign_k
+        # There's probably a more vectorized way to do this
+        outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
+        
+    if debug_pauses:
+        end = time.time()
+        raw_input("Outliers flagged in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+        
+    if score:        
+        if safe_scoreing:
+            scores = calculate_anomaly_scores_from_building_up_graph(outliers, unq_dx[unq_dx>r], dx, n) # if I enumerate over d, I can just take a slice from unqs[r:]
+        else:
+            scores = calculate_anomaly_scores(outliers, dx, n)
+    else:
+        scores=None
+    
+    if debug_pauses:
+        end = time.time()
+        raw_input("Outliers scored in {t}. Press enter to continue.".format(t=end-start))
+        start=time.time()
+    
+    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
+    
     
 if __name__ == '__main__':
     import pandas as pd
