@@ -178,6 +178,15 @@ def calculate_anomaly_scores(outliers, adj, n):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
     
+def comb_index(n, k):
+    """
+    via http://stackoverflow.com/questions/16003217/n-d-version-of-itertools-combinations-in-numpy
+    """
+    count = comb(n, k, exact=True)
+    index = np.fromiter(chain.from_iterable(combinations(range(n), k)), 
+                        int, count=count*k)
+    return index.reshape(-1, k)
+    
 def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
@@ -201,7 +210,8 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     g.add_nodes_from(range(n))
     
     dx = pdist(X, method)    
-    ix = np.array([ij for ij in combinations(range(n),2)])
+    #ix = np.array([ij for ij in combinations(range(n),2)]) # this call is causing memory to explode
+    ix = comb_index(n,2)
     d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     d_ij = d_ij[dx.argsort(),:] # order by distance
     

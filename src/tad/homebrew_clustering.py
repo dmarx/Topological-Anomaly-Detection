@@ -6,7 +6,8 @@ import itertools
 from collections import Counter
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
-#import gc
+from itertools import combinations, chain
+from scipy.misc import comb
 
 # Classes for building and merging clusters. 
 
@@ -103,6 +104,15 @@ def score_outliers(outliers, dx):
     s1 = mat[inliers,:]
     return s1[:,outliers].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
         
+def comb_index(n, k):
+    """
+    via http://stackoverflow.com/questions/16003217/n-d-version-of-itertools-combinations-in-numpy
+    """
+    count = comb(n, k, exact=True)
+    index = np.fromiter(chain.from_iterable(combinations(range(n), k)), 
+                        int, count=count*k)
+    return index.reshape(-1, k)
+        
 def hclust_tad(X, method='euclidean', perc=.05, score=True):
     """
     Performs hierarchical clustering on the input data to identify 
@@ -110,7 +120,9 @@ def hclust_tad(X, method='euclidean', perc=.05, score=True):
     """
     n = X.shape[0]
     dx = pdist(X, method)    
-    ix = np.array([ij for ij in itertools.combinations(range(n),2)])
+    #ix = np.array([ij for ij in itertools.combinations(range(n),2)])
+    #ix = cartesian((np.arange(n), np.arange(n))) # incorrect dimensions, doesn't respect ordering
+    ix = comb_index(n,2)
     d_ij = np.hstack((dx[:,None], ix)) # append edgelist
     d_ij = d_ij[dx.argsort(),:] # order by distance
         
