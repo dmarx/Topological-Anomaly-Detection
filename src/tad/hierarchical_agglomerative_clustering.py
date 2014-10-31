@@ -195,16 +195,47 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     else:
         scores=None
     
-    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
+    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'resolution':r, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
     
+#def PCA_plot(data, tad
     
 if __name__ == '__main__':
     import pandas as pd
     import matplotlib.pyplot as plt
     from sklearn import datasets
+    from pandas.tools.plotting import scatter_matrix
+    from sklearn.decomposition import PCA
+    
     iris = datasets.load_iris()
     X = iris.data
-    test = hclust_outliers(X)
+    df = pd.DataFrame(X)
+    res = hclust_outliers(X)
+    
+    print res['scores']
+
+    df['anomaly']=0
+    df.anomaly.ix[res['outliers']] = 1
+    scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
+    plt.show()
+
+    print 'Anomalies:', res['outliers']
+    g = res['graph']
+    X_pca = PCA().fit_transform(df)
+    pos = dict((i,(X_pca[i,0], X_pca[i,1])) for i in range(X_pca.shape[0]))
+    colors = []
+    for obs in range(X.shape[0]):
+        if obs in res['outliers']:
+            colors.append('r')
+        else:
+            colors.append('b')
+    labels = {}
+    for node in g.nodes():
+        if node in res['outliers']:
+            labels[node] = node
+        else:
+            labels[node] = ''
+    nx.draw(g, pos=pos, node_color = colors, labels=labels)
+    plt.show()
     
     if 1==0:
         # generate a plot for k vs. count(n0) to demonstrate that

@@ -26,6 +26,7 @@ X_pca = PCA().fit_transform(df)
 pos = dict((i,(X_pca[i,0], X_pca[i,1])) for i in range(X_pca.shape[0]))
 colors = [node[1]['color'] for node in g.nodes(data=True)]
 labels = {}
+print len(g.nodes())
 for node in g.nodes():
     if node in res['classed']['anomalies']:
         labels[node] = node

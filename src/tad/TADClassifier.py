@@ -40,6 +40,7 @@ def construct_graph(edges, n):
     adjacency matrix).
     """
     g = nx.Graph()
+    g.add_nodes_from(range(n))
     for z, ij in enumerate(combinations(range(n),2)):
         d = edges[z]
         if d:
