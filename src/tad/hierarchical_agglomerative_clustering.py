@@ -59,6 +59,23 @@ def count_outliers(clusters, cutoff=0):
     
     return outlier_clusters, count_n0
 
+def assign_observations(clusters):
+    """
+    Converts a list of lists (of the kind returned by 
+    networkx.connected_components) into a flat vector whose indices correspond
+    to the unique nested values (nodes) in the 'clusters' input, and whose values 
+    correspond to a component id (the index of the "cluster's" list in the 
+    input list after sorting).
+    """
+    clusters.sort()
+    assignments = []
+    for c, clust in enumerate(clusters):
+        for obs in clust:
+            assignments.append([obs, c])
+    assignments = np.array(assignments)
+    ix = assignments[:,0].argsort()
+    return assignments[ix, 1]
+    
 def row_col_from_condensed_index(n,ix):
     b = 1 -2*n
     x = np.floor((-b - np.sqrt(b**2 - 8*ix))/2)
@@ -107,9 +124,6 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
                         entirely, but the scoring operation will be much, much slower. Way slower.
                         Like, maybe-not-even-worth-it slower.
     """
-    if debug_pauses:
-        import time
-        start = time.time()
     
     # initialize an unconnected graph
     n=X.shape[0]
@@ -118,18 +132,8 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     
     dx = pdist(X, method)    
     
-    if debug_pauses:
-        end = time.time()
-        raw_input("Distance matrix constructed in {t}. Press enter to continue.".format(t=end-start))
-        start=time.time()
-    
     unq_dx = np.unique(dx)
     unq_dx.sort()
-    
-    if debug_pauses:
-        end = time.time()
-        raw_input("Distance matrix sorted in {t}. Press enter to continue.".format(t=end-start))
-        start=time.time()
     
     k=0 # counter for the number of break points
     
@@ -180,11 +184,6 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     if track_assignments:
         assignments = assignments[:k+1, :] # Trim out unused rows
     
-    if debug_pauses:
-        end = time.time()
-        raw_input("Main algorithm completed in {t}. Press enter to continue.".format(t=end-start))
-        start=time.time()
-    
     # flag outliers
     outliers=None
     if percentile:
@@ -193,20 +192,10 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
         # There's probably a more vectorized way to do this
         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
         
-    if debug_pauses:
-        end = time.time()
-        raw_input("Outliers flagged in {t}. Press enter to continue.".format(t=end-start))
-        start=time.time()
-        
     if score:        
         scores = score_outliers__index_method(outliers, dx, n)
     else:
         scores=None
-    
-    if debug_pauses:
-        end = time.time()
-        raw_input("Outliers scored in {t}. Press enter to continue.".format(t=end-start))
-        start=time.time()
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
     
