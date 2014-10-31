@@ -183,6 +183,7 @@ def calculate_anomaly_scores_from_matrix(outliers, mat, n):
     #inliers = adj.index.difference(outliers)
     m = mat.shape[0]
     inliers = np.setdiff1d( range(m), outliers)    
+    mat[np.triu_indices(n)] = np.inf # Put inf back where we had NaNs
     #s1 = mat[:,outliers] # this should just be a view onto the array, but fancy indexing returns a copy, so indexing on the smaller index gives a smaller result
     #return s1[inliers,:].min(axis=0) # axis: 0=columns, 1=rows ... This seems backwards
     return mat[inliers.reshape(-1,1), outliers].min(axis=0)
@@ -459,6 +460,26 @@ def row_col_from_condensed_index(n,ix):
     y = ix + x*(b + x + 2)/2 + 1
     return (x,y)  
 
+def condensed_index_from_row_col(n,i,j):
+    # i is always the smaller index... or doesn't it make a difference? I think it doesn't make a difference.
+    ix1 = i>j
+    #ix2 = i>j
+    ix2 = np.logical_not(ix1)
+    i1, j1 = i[ix1], j[ix1]
+    i2, j2 = j[ix2], i[ix2]
+    i = np.hstack([i1,i2])
+    j = np.hstack([j1,j2])
+    return n*j - j*(j+1)/2 + i - 1 - j
+    
+def score_outliers__index_method(outliers, dx, n):
+    inliers = np.setdiff1d( range(n), outliers)
+    #m = len(inliers)
+    m = n - len(outliers)
+    scores = []
+    for outl in outliers:
+        ix = condensed_index_from_row_col(n, np.repeat(outl, m), inliers)
+        scores.append(dx[ix].min())
+    return scores
 
 def hclust_outliers3(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, debug_pauses=False, safe_scoreing=False):
     """
@@ -579,7 +600,8 @@ def hclust_outliers3(X, percentile=.05, method='euclidean', track_stats=True, tr
         
     if score:        
         if safe_scoreing:
-            scores = calculate_anomaly_scores_from_building_up_graph(outliers, unq_dx[unq_dx>r], dx, n) # if I enumerate over d, I can just take a slice from unqs[r:]
+            #scores = calculate_anomaly_scores_from_building_up_graph(outliers, unq_dx[unq_dx>r], dx, n) # if I enumerate over d, I can just take a slice from unqs[r:]
+            scores = score_outliers__index_method(outliers, dx, n)
         else:
             scores = calculate_anomaly_scores(outliers, dx, n)
     else:
