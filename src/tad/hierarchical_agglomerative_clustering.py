@@ -195,7 +195,7 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     else:
         scores=None
     
-    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'resolution':r, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores}
+    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'resolution':r, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores, 'r_nclust':r_nclust}
     
 #def PCA_plot(data, tad
     
