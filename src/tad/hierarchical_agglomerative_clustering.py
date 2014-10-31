@@ -93,7 +93,7 @@ def condensed_index_from_row_col(n,i,j):
     j = np.hstack([j1,j2])
     return n*j - j*(j+1)/2 + i - 1 - j
     
-def score_outliers__index_method(outliers, dx, n):
+def calculate_anomaly_scores(outliers, dx, n):
     inliers = np.setdiff1d( range(n), outliers)
     #m = len(inliers)
     m = n - len(outliers)
@@ -187,13 +187,11 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     # flag outliers
     outliers=None
     if percentile:
-        #last_assign = assignments[k,:]
         last_assign = assign_k
-        # There's probably a more vectorized way to do this
         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
         
     if score:        
-        scores = score_outliers__index_method(outliers, dx, n)
+        scores = calculate_anomaly_scores(outliers, dx, n)
     else:
         scores=None
     
