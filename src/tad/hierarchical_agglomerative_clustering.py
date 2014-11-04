@@ -216,7 +216,8 @@ to allow early stopping.""")
                 ix = ix-1
                 break
         maximal_assignment = outlier_objs[ix]
-        maximal_assignment['scores'] = calculate_anomaly_scores(maximal_assignment['outliers'] , dx, n)
+        if score:
+            maximal_assignment['scores'] = calculate_anomaly_scores(maximal_assignment['outliers'] , dx, n)
         outlier_objs.reverse()
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outlier_objs, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'r_nclust':r_nclust, 'maximal_assignment':maximal_assignment}
