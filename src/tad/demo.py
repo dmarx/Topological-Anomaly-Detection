@@ -33,4 +33,5 @@ for node in g.nodes():
     else:
         labels[node] = ''
 nx.draw(g, pos=pos, node_color = colors, labels=labels)
+nx.draw_networkx_labels(g, pos=pos, node_color = colors, labels=labels)
 plt.show()

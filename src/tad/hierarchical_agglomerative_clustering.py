@@ -103,7 +103,7 @@ def calculate_anomaly_scores(outliers, dx, n):
         scores.append(dx[ix].min())
     return scores
 
-def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, early_stop=False):
+def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, early_stop=False, maximal_clustering=True):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -145,6 +145,15 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
             raise Exception("Either specify a target percentile, or enable assignment tracking.")
         assignments = None
     
+    if early_stop and maximal_clustering:
+        raise Exception("""
+Maximizing outlier clustering requires iterating through all graph possible resolutions. 
+This is mutually exclusive with early stopping. 
+Set 
+    early_stop=False
+to achieve maximal clustering, or set
+    maximal_clustering=False
+to allow early stopping.""")
     
     count_n0_vs_r = {0:n} # {k:v}-> r:count of obs in V
     
@@ -182,7 +191,7 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
                     if percentile:
                         last_assign = assign_k
                         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
-                    if score:        
+                    if score and not maximal_clustering:        
                         scores = calculate_anomaly_scores(outliers, dx, n)
                     outlier_objs.append({'resolution':r,'scores':scores,'outliers':outliers})
                     if early_stop:
@@ -195,8 +204,22 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
         scores = calculate_anomaly_scores(outliers, dx, n)
     else:
         scores=None
+        
+    maximal_assignment = None
+    if maximal_clustering:
+        outlier_objs.reverse()
+        m=0 # number of outliers
+        for ix, obj in enumerate(outlier_objs):
+            last_m = m
+            m = len(obj['outliers'])
+            if last_m > m:
+                ix = ix-1
+                break
+        maximal_assignment = outlier_objs[ix]
+        maximal_assignment['scores'] = calculate_anomaly_scores(maximal_assignment['outliers'] , dx, n)
+        outlier_objs.reverse()
     
-    return {'assignments':assignments, 'distances':dx, 'outliers':outlier_objs, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'r_nclust':r_nclust}
+    return {'assignments':assignments, 'distances':dx, 'outliers':outlier_objs, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'r_nclust':r_nclust, 'maximal_assignment':maximal_assignment}
     
     
 if __name__ == '__main__':
