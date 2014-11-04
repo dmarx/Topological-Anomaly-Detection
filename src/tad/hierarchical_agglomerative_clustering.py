@@ -103,7 +103,7 @@ def calculate_anomaly_scores(outliers, dx, n):
         scores.append(dx[ix].min())
     return scores
 
-def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False):
+def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, early_stop=False):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -154,18 +154,16 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     nclust = n # number of components on initialization
     r_nclust = [] # list of tuples, giving the graph resolution and number of clusters at each split
     r_nclust.append([r,nclust])
+    outlier_objs = [] # {resolution, outliers, scores}
     if percentile:
         cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
     for d in unq_dx :
         r = d
-        #print d
         for i,j in zip(*row_col_from_condensed_index(n, np.where(dx==d)[0])):
-        #print block
-        #for i,j in zip(*block): # there may be a more efficient way of doing this
             if i==j:
                 continue
             g.add_edge(i,j)
-        clust  = nx.connected_components(g)
+        clust  = [c for c in nx.connected_components(g)]
         nclust = len(clust)
         if r_nclust[-1][1] > nclust: # test that the number of clusters has changed as we update graph resolution
             r_nclust.append([r, nclust])
@@ -179,25 +177,27 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
                 if track_stats:
                     count_n0_vs_r[k] = count_n0
                 if outlier_clusters:
-                    break      
+                    outliers=None
+                    scores=None
+                    if percentile:
+                        last_assign = assign_k
+                        outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
+                    if score:        
+                        scores = calculate_anomaly_scores(outliers, dx, n)
+                    outlier_objs.append({'resolution':r,'scores':scores,'outliers':outliers})
+                    if early_stop:
+                        break
         
     if track_assignments:
         assignments = assignments[:k+1, :] # Trim out unused rows
     
-    # flag outliers
-    outliers=None
-    if percentile:
-        last_assign = assign_k
-        outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
-        
     if score:        
         scores = calculate_anomaly_scores(outliers, dx, n)
     else:
         scores=None
     
-    return {'assignments':assignments, 'distances':dx, 'outliers':outliers, 'graph':g, 'resolution':r, 'count_n0_vs_r':count_n0_vs_r, 'scores':scores, 'r_nclust':r_nclust}
+    return {'assignments':assignments, 'distances':dx, 'outliers':outlier_objs, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'r_nclust':r_nclust}
     
-#def PCA_plot(data, tad
     
 if __name__ == '__main__':
     import pandas as pd
@@ -205,12 +205,12 @@ if __name__ == '__main__':
     from sklearn import datasets
     from pandas.tools.plotting import scatter_matrix
     from sklearn.decomposition import PCA
-    
+
     iris = datasets.load_iris()
     X = iris.data
     df = pd.DataFrame(X)
     res = hclust_outliers(X)
-    
+
     print res['scores']
 
     df['anomaly']=0
@@ -236,7 +236,7 @@ if __name__ == '__main__':
             labels[node] = ''
     nx.draw(g, pos=pos, node_color = colors, labels=labels)
     plt.show()
-    
+
     if 1==0:
         # generate a plot for k vs. count(n0) to demonstrate that
         # when we grow the AGNES tree, count(n0) is non-increasing.
