@@ -103,7 +103,7 @@ def calculate_anomaly_scores(outliers, dx, n):
         scores.append(dx[ix].min())
     return scores
 
-def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, early_stop=False, maximal_clustering=True):
+def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, early_stop=True, maximal_clustering=False, divisive=True):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -127,13 +127,16 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     
     # initialize an unconnected graph
     n=X.shape[0]
-    g = nx.Graph()
-    g.add_nodes_from(range(n))
-    
-    dx = pdist(X, method)    
-    
+    dx = pdist(X, method)        
     unq_dx = np.unique(dx)
     unq_dx.sort()
+    
+    if divisive:
+        unq_dx = unq_dx[::-1] # reverse. Not sure if this is best way... http://stackoverflow.com/questions/16486252/is-it-possible-to-use-argsort-in-descending-order
+        g = nx.from_numpy_matrix(squareform(dx)) # would be nice if we could avoid building the squareform
+    else:
+        g = nx.Graph()
+        g.add_nodes_from(range(n))
     
     k=0 # counter for the number of break points
     
@@ -166,15 +169,19 @@ to allow early stopping.""")
     outlier_objs = [] # {resolution, outliers, scores}
     if percentile:
         cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
+    outlier_count = 0
     for d in unq_dx :
         r = d
         for i,j in zip(*row_col_from_condensed_index(n, np.where(dx==d)[0])):
             if i==j:
                 continue
-            g.add_edge(i,j)
+            if divisive:
+                g.remove_edge(i,j)
+            else:
+                g.add_edge(i,j)
         clust  = [c for c in nx.connected_components(g)]
         nclust = len(clust)
-        if r_nclust[-1][1] > nclust: # test that the number of clusters has changed as we update graph resolution
+        if r_nclust[-1][1] != nclust: # test that the number of clusters has changed as we update graph resolution
             r_nclust.append([r, nclust])
             k+=1
             assign_k = assign_observations(clust)
@@ -191,12 +198,16 @@ to allow early stopping.""")
                     if percentile:
                         last_assign = assign_k
                         outliers = [i for i,c in enumerate(last_assign) if c in outlier_clusters] 
+                        last_outlier_count = outlier_count
+                        outlier_count = len(outliers)
+                    if divisive and outlier_count < last_outlier_count:
+                            break
                     if score and not maximal_clustering:        
                         scores = calculate_anomaly_scores(outliers, dx, n)
                     outlier_objs.append({'resolution':r,'scores':scores,'outliers':outliers})
-                    if early_stop:
+                    if early_stop and not divisive:
                         break
-        
+                        
     if track_assignments:
         assignments = assignments[:k+1, :] # Trim out unused rows
     
@@ -205,8 +216,8 @@ to allow early stopping.""")
     else:
         scores=None
         
-    maximal_assignment = None
-    if maximal_clustering:
+    maximal_assignment = outlier_objs[-1]
+    if maximal_clustering and not divisive:
         outlier_objs.reverse()
         m=0 # number of outliers
         for ix, obj in enumerate(outlier_objs):
@@ -222,7 +233,9 @@ to allow early stopping.""")
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outlier_objs, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'r_nclust':r_nclust, 'maximal_assignment':maximal_assignment}
     
-    
+
+
+
 if __name__ == '__main__':
     import pandas as pd
     import matplotlib.pyplot as plt
