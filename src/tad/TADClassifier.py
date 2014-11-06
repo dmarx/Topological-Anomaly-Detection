@@ -95,18 +95,10 @@ def flag_anomalies(g, min_pts_bgnd, node_colors={'anomalies':'r', 'background':'
              whether or not they are anomalous
      """
     print "min_pts_bgnd:", min_pts_bgnd
-    #res = {'anomalies':[],'background':[]}
     outliers = []
     for c in nx.connected_components(g):
         if len(c) < min_pts_bgnd:
-            #res['anomalies'].extend(c)
             outliers.extend(c)
-        #else:
-        #    res['background'].extend(c)
-    #for type, array in res.iteritems():
-    #    for node_id in array:
-    #        g.node[node_id]['class'] = type
-    #        g.node[node_id]['color'] = node_colors[type]
     return outliers
 
 def calculate_anomaly_scores(outliers, adj, n):
@@ -159,9 +151,7 @@ def tad_classify(X, method='euclidean', r=None, rq=.1, p=.1, distances=None):
         adj = pdist(X, method)
     if r is None:
         r = np.percentile(adj, 100*rq)
-    #edges, r = trim_adjacency_matrix(adj, r, rq)
     n = X.shape[0]
-    #g = construct_graph(edges, n)
     g = construct_constrained_graph(adj, r, n)
     outliers =  flag_anomalies(g, n*p)
     print "outliers"
