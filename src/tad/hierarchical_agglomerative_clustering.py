@@ -12,6 +12,7 @@ import copy
 import networkx as nx
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+from scipy.sparse import csr_matrix
 import pandas as pd
 
 
@@ -102,8 +103,26 @@ def calculate_anomaly_scores(outliers, dx, n):
         ix = condensed_index_from_row_col(n, np.repeat(outl, m), inliers)
         scores.append(dx[ix].min())
     return scores
+    
+def build_full_graph_from_condensed_distance_matrix(dx, n, early_stop=True, check_every_perc = .05):    
+    if early_stop:
+        k = dx.nonzero()[dx.argsort()]
+        check = np.floor(n*check_every_perc)
+    else:
+        k = dx.nonzero()
+    x,y = row_col_from_condensed_index(n,k)
+    g = nx.Graph()
+    g.add_nodes_from(range(n))
+    for iter, ij in enumerate(zip(x,y)):
+        i,j = ij
+        g.add_edge(i,j)
+        if early_stop:
+            if iter % check == 0:
+                if len(nx.connected_components) <= 2:
+                    break
+    return g
 
-def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, track_assignments=False, score=True, distances = False, early_stop=True, maximal_clustering=False, divisive=True):
+def hclust_outliers(X, percentile=.05, method='euclidean', divisive=True, maximal_clustering=False, score=True, distances = False, early_stop=True, track_stats=False, track_assignments=False):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -128,13 +147,35 @@ def hclust_outliers(X, percentile=.05, method='euclidean', track_stats=True, tra
     # initialize an unconnected graph
     n=X.shape[0]
     dx = pdist(X, method)        
-    unq_dx = np.unique(dx)
-    unq_dx.sort()
     
     if divisive:
+        k = np.floor(n*(n-1)*percentile) # minimum number of unnecessary distance calculations, 
+                                         # assuming the only frivolous calculations are from the 
+                                         # outliers to all observations that are not their nearest 
+                                         # inlier observations
+        #dx[dx.argsort()][-k:] = 0 # set unnecessary calculations to zero for a 10% (?) reduction in edges
+        ix = dx.argsort()
+        dx2 = dx[ix] # fancy indexing returns a copy :(
+        maxd = dx2[-k]
+        del dx2
+        #print "Starting resource"
+        #with dx[ix] as dx2: # will this work better than 'del'?
+        #    maxd = dx2[-k]
+        #    print "Done with resource"
+        dx[dx>maxd] =0
+        
+        unq_dx = np.unique(dx)
+        unq_dx.sort()
         unq_dx = unq_dx[::-1] # reverse. Not sure if this is best way... http://stackoverflow.com/questions/16486252/is-it-possible-to-use-argsort-in-descending-order
-        g = nx.from_numpy_matrix(squareform(dx)) # would be nice if we could avoid building the squareform
+        #g = nx.from_numpy_matrix(squareform(dx)) # would be nice if we could avoid building the squareform
+        g = build_full_graph_from_condensed_distance_matrix(dx, n)
+        # Not sure if this is better or worse...
+        print "Hold on to your ass..."
+        #g = nx.from_scipy_sparse_matrix(csr_matrix(squareform(dx)))
+        print "Full graph built"
     else:
+        unq_dx = np.unique(dx)
+        unq_dx.sort()
         g = nx.Graph()
         g.add_nodes_from(range(n))
     
@@ -163,9 +204,11 @@ to allow early stopping.""")
     # Incrementally add edges to the graph to determine clustering
     r=0 # current graph resolution
     last_d = 0 # prior observed 'd'
-    nclust = n # number of components on initialization
+    last_clust=n
     r_nclust = [] # list of tuples, giving the graph resolution and number of clusters at each split
-    r_nclust.append([r,nclust])
+    if track_stats:
+        nclust = n # number of components on initialization
+        r_nclust.append([r,nclust])
     outlier_objs = [] # {resolution, outliers, scores}
     if percentile:
         cutoff = np.floor(n*percentile) # target number of points we want to characterize as outliers
@@ -181,12 +224,15 @@ to allow early stopping.""")
                 g.add_edge(i,j)
         clust  = [c for c in nx.connected_components(g)]
         nclust = len(clust)
-        if r_nclust[-1][1] != nclust: # test that the number of clusters has changed as we update graph resolution
-            r_nclust.append([r, nclust])
+        if last_clust != nclust: # test that the number of clusters has changed as we update graph resolution
+            #r_nclust.append([r, nclust])
+            last_clust = nclust
             k+=1
             assign_k = assign_observations(clust)
             if track_assignments:
                 assignments[k,:] = assign_k
+            if track_stats:
+                r_nclust.append([r, nclust])
             
             if percentile: 
                 outlier_clusters, count_n0 = count_outliers(clust, cutoff)
