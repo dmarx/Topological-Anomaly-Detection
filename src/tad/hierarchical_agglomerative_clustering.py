@@ -292,28 +292,30 @@ if __name__ == '__main__':
     iris = datasets.load_iris()
     X = iris.data
     df = pd.DataFrame(X)
-    res = hclust_outliers(X)
+    #res = hclust_outliers(X)
+    res = hclust_outliers(X, divisive=False, maximal_clustering=True, early_stop=False)
 
-    print res['scores']
+    #print res['scores']
+    print res['maximal_assignment']['outliers']
 
     df['anomaly']=0
-    df.anomaly.ix[res['outliers']] = 1
+    df.anomaly.ix[res['maximal_assignment']['outliers']] = 1
     scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
     plt.show()
 
-    print 'Anomalies:', res['outliers']
+    print 'Anomalies:', res['maximal_assignment']['outliers']
     g = res['graph']
     X_pca = PCA().fit_transform(df)
     pos = dict((i,(X_pca[i,0], X_pca[i,1])) for i in range(X_pca.shape[0]))
     colors = []
     for obs in range(X.shape[0]):
-        if obs in res['outliers']:
+        if obs in res['maximal_assignment']['outliers']:
             colors.append('r')
         else:
             colors.append('b')
     labels = {}
     for node in g.nodes():
-        if node in res['outliers']:
+        if node in res['maximal_assignment']['outliers']:
             labels[node] = node
         else:
             labels[node] = ''
