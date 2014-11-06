@@ -52,6 +52,17 @@ def row_col_from_condensed_index(n,ix):
     y = ix + x*(b + x + 2)/2 + 1
     return (x,y)  
     
+def condensed_index_from_row_col(n,i,j):
+    # i is always the smaller index... or doesn't it make a difference? I think it doesn't make a difference.
+    ix1 = i>j
+    #ix2 = i>j
+    ix2 = np.logical_not(ix1)
+    i1, j1 = i[ix1], j[ix1]
+    i2, j2 = j[ix2], i[ix2]
+    i = np.hstack([i1,i2])
+    j = np.hstack([j1,j2])
+    return n*j - j*(j+1)/2 + i - 1 - j
+    
 def construct_constrained_graph(adj, r, n):
     """
     given an adjacency matrix adj in the form of a condensed distance matrix
@@ -59,7 +70,9 @@ def construct_constrained_graph(adj, r, n):
     graph for all distances less than or equal to r.
     """
     ij = row_col_from_condensed_index(n, np.where(adj<=r)[0])
-    return nx.from_edgelist(zip(*ij))
+    g = nx.from_edgelist(zip(*ij))
+    g.add_nodes_from(range(n))
+    return g
     
 def flag_anomalies(g, min_pts_bgnd, node_colors={'anomalies':'r', 'background':'b'}):
     """
@@ -82,38 +95,20 @@ def flag_anomalies(g, min_pts_bgnd, node_colors={'anomalies':'r', 'background':'
              whether or not they are anomalous
      """
     print "min_pts_bgnd:", min_pts_bgnd
-    res = {'anomalies':[],'background':[]}
+    outliers = []
     for c in nx.connected_components(g):
         if len(c) < min_pts_bgnd:
-            res['anomalies'].extend(c)
-        else:
-            res['background'].extend(c)
-    for type, array in res.iteritems():
-        for node_id in array:
-            g.node[node_id]['class'] = type
-            g.node[node_id]['color'] = node_colors[type]
-    return res, g
+            outliers.extend(c)
+    return outliers
 
-def calculate_anomaly_scores(classed, adj, n):
-    """
-    The "anomalous-ness" of an anomaly is the distance between that 
-    observation and the nearest background component, i.e. the distance to the
-    nearest non-anomaly observation. Scores are returned as a pandas.Series
-    """
-    scores = {}
-    for a in classed['anomalies']:
-        scores[a] = 0
-        for z, ij in enumerate(combinations(range(n),2)):
-            i,j = ij
-            if (i == a or j == a) and (
-                i in classed['background'] or
-                j in classed['background']):
-                d = adj[z]
-                if scores[a]:
-                    scores[a] = np.min([scores[a], d])
-                else:
-                    scores[a] = d
-    return pd.Series(scores)
+def calculate_anomaly_scores(outliers, adj, n):
+    inliers = np.setdiff1d( range(n), outliers)    
+    m = n - len(outliers) # is this faster than len(inliers) ?
+    scores = []
+    for outl in outliers:        
+        ix = condensed_index_from_row_col(n, np.repeat(outl, m), inliers)        
+        scores.append(adj[ix.astype(int)].min())
+    return scores
 
 def tad_classify(X, method='euclidean', r=None, rq=.1, p=.1, distances=None):
     """
@@ -156,10 +151,10 @@ def tad_classify(X, method='euclidean', r=None, rq=.1, p=.1, distances=None):
         adj = pdist(X, method)
     if r is None:
         r = np.percentile(adj, 100*rq)
-    #edges, r = trim_adjacency_matrix(adj, r, rq)
     n = X.shape[0]
-    #g = construct_graph(edges, n)
     g = construct_constrained_graph(adj, r, n)
-    classed, g =  flag_anomalies(g, n*p)
-    scores = calculate_anomaly_scores(classed, adj, n)
-    return {'classed':classed, 'g':g, 'scores':scores, 'r':r, 'min_pts_bgnd':n*p, 'distances':adj}
+    outliers =  flag_anomalies(g, n*p)
+    print "outliers"
+    print outliers
+    scores = calculate_anomaly_scores(outliers, adj, n)
+    return {'outliers':outliers, 'g':g, 'scores':scores, 'r':r, 'min_pts_bgnd':n*p, 'distances':adj}

@@ -9,16 +9,18 @@ import time
 
 iris = datasets.load_iris()
 df = pd.DataFrame(iris.data)
+
 start = time.time()
-res = tad_classify(df)
+res = tad_classify(df.values)
 print "Elapsed: {t}".format(t=time.time()-start)
 
 print res['scores']
 
-df['anomaly']=0
-df.anomaly.ix[res['classed']['anomalies']] = 1
-scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
-plt.show()
+if True:
+    df['anomaly']=0
+    df.anomaly.ix[res['outliers']] = 1
+    scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
+    plt.show()
 
 print 'Anomalies:', res['classed']['anomalies']
 g = res['g']
@@ -35,3 +37,4 @@ for node in g.nodes():
 nx.draw(g, pos=pos, node_color = colors, labels=labels)
 nx.draw_networkx_labels(g, pos=pos, node_color = colors, labels=labels)
 plt.show()
+
