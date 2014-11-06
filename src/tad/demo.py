@@ -10,7 +10,8 @@ iris = datasets.load_iris()
 df = pd.DataFrame(iris.data)
 res = tad_classify(df.values)
 
-if True:
+plot = False
+if plot:
     df['anomaly']=0
     df.anomaly.ix[res['outliers']] = 1
     scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
