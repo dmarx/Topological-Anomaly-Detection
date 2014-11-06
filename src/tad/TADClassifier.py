@@ -25,10 +25,7 @@ def trim_adjacency_matrix(adj, r=None, rq=.1):
     to use the 10th percentile of distances as 'r'.
     """
     if r is None:
-        # This is really just a lazy quantile function.
-        q = int(np.floor(len(adj)*rq))
-        print "q:", q
-        r = np.sort(adj)[q]
+        r = np.percentile(adj, 100*rq)
     print "r:", r
     adj2 = adj.copy()
     adj2[adj>r] = 0 
@@ -45,8 +42,24 @@ def construct_graph(edges, n):
         d = edges[z]
         if d:
             i,j = ij
-            g.add_edge(i,j, weight=d)
+            g.add_edge(i,j, weight=d) # I don't think we need the weight for anything...
     return g
+    
+
+def row_col_from_condensed_index(n,ix):
+    b = 1 -2*n
+    x = np.floor((-b - np.sqrt(b**2 - 8*ix))/2)
+    y = ix + x*(b + x + 2)/2 + 1
+    return (x,y)  
+    
+def construct_constrained_graph(adj, r, n):
+    """
+    given an adjacency matrix adj in the form of a condensed distance matrix
+    (of the kind returned by pdist) for n observations, returns the similarity
+    graph for all distances less than or equal to r.
+    """
+    ij = row_col_from_condensed_index(n, np.where(adj<=r)[0])
+    return nx.from_edgelist(zip(*ij))
     
 def flag_anomalies(g, min_pts_bgnd, node_colors={'anomalies':'r', 'background':'b'}):
     """
@@ -141,9 +154,12 @@ def tad_classify(X, method='euclidean', r=None, rq=.1, p=.1, distances=None):
     # Maintain original matrix for calculating anomaly score
     if not distances:
         adj = pdist(X, method)
-    edges, r = trim_adjacency_matrix(adj, r, rq)
+    if r is None:
+        r = np.percentile(adj, 100*rq)
+    #edges, r = trim_adjacency_matrix(adj, r, rq)
     n = X.shape[0]
-    g = construct_graph(edges, n)
+    #g = construct_graph(edges, n)
+    g = construct_constrained_graph(adj, r, n)
     classed, g =  flag_anomalies(g, n*p)
     scores = calculate_anomaly_scores(classed, adj, n)
     return {'classed':classed, 'g':g, 'scores':scores, 'r':r, 'min_pts_bgnd':n*p, 'distances':adj}
