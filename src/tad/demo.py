@@ -16,7 +16,8 @@ print "Elapsed: {t}".format(t=time.time()-start)
 
 print res['scores']
 
-if True:
+plot = False
+if plot:
     df['anomaly']=0
     df.anomaly.ix[res['outliers']] = 1
     scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
