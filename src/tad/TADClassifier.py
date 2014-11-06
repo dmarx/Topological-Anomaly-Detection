@@ -25,10 +25,7 @@ def trim_adjacency_matrix(adj, r=None, rq=.1):
     to use the 10th percentile of distances as 'r'.
     """
     if r is None:
-        # This is really just a lazy quantile function.
-        q = int(np.floor(len(adj)*rq))
-        print "q:", q
-        r = np.sort(adj)[q]
+        r = np.percentile(adj, 100*rq)
     print "r:", r
     adj2 = adj.copy()
     adj2[adj>r] = 0 
