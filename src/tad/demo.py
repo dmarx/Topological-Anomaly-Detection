@@ -10,10 +10,11 @@ iris = datasets.load_iris()
 df = pd.DataFrame(iris.data)
 res = tad_classify(df.values)
 
-plot = False
+plot = True
 if plot:
     df['anomaly']=0
-    df.anomaly.ix[res['outliers']] = 1
+    outliers_flat = res['scores'].keys()
+    df.anomaly.ix[outliers_flat] = 1
     scatter_matrix(df.ix[:,:4], c=df.anomaly, s=(25 + 50*df.anomaly), alpha=.8)
     plt.show()
 
@@ -24,7 +25,7 @@ if plot:
     colors = []
     labels = {}
     for node in g.nodes():
-        if node in res['outliers']:
+        if node in outliers_flat:
             labels[node] = node
             colors.append('r')
         else:
