@@ -104,25 +104,38 @@ def calculate_anomaly_scores(outliers, dx, n):
         scores.append(dx[ix].min())
     return scores
     
-def build_full_graph_from_condensed_distance_matrix(dx, n, early_stop=True, check_every_perc = .05):    
-    if early_stop:
-        k = dx.nonzero()[dx.argsort()]
-        check = np.floor(n*check_every_perc)
-    else:
-        k = dx.nonzero()
-    x,y = row_col_from_condensed_index(n,k)
+def build_full_graph_from_condensed_distance_matrix(dx, n, early_stop=False, check_every_perc = .05):    
+    print "Building full graph..."
+    
+    if not early_stop:
+        return nx.complete_graph(n)
+    
+    k = dx.argsort()
+    #k = dx.nonzero()[dx.argsort()]
+    check = np.floor(n*check_every_perc)
     g = nx.Graph()
     g.add_nodes_from(range(n))
+        
+    x,y = row_col_from_condensed_index(n,k)
+    
+    #if not early_stop:
+    #    g = nx.from_edgelist(zip(x,y))
+    #    g.add_nodes_from(range(n))
+    #    return g
+    
     for iter, ij in enumerate(zip(x,y)):
         i,j = ij
         g.add_edge(i,j)
         if early_stop:
             if iter % check == 0:
-                if len(nx.connected_components) <= 2:
+                if len([c for c in nx.connected_components(g)]) <= 2:
+                    print "Connected components stop condition met"
                     break
+    print "Full graph built"
+    print len(g.edges())
     return g
 
-def hclust_outliers(X, percentile=.05, method='euclidean', divisive=True, maximal_clustering=False, score=True, distances = False, early_stop=True, track_stats=False, track_assignments=False):
+def hclust_outliers(X, percentile=.05, method='euclidean', divisive=True, maximal_clustering=True, score=True, distances = False, early_stop=False, track_stats=False, track_assignments=False):
     """
     Agglomerative hierarchical clustering for outlier analysis. Constructs the
     the hierarchy incrementally. At each break, tests to see how many 
@@ -149,20 +162,16 @@ def hclust_outliers(X, percentile=.05, method='euclidean', divisive=True, maxima
     dx = pdist(X, method)        
     
     if divisive:
-        k = np.floor(n*(n-1)*percentile) # minimum number of unnecessary distance calculations, 
+        #k = np.floor(n*(n-1)*percentile) # minimum number of unnecessary distance calculations, 
                                          # assuming the only frivolous calculations are from the 
                                          # outliers to all observations that are not their nearest 
                                          # inlier observations
         #dx[dx.argsort()][-k:] = 0 # set unnecessary calculations to zero for a 10% (?) reduction in edges
-        ix = dx.argsort()
-        dx2 = dx[ix] # fancy indexing returns a copy :(
-        maxd = dx2[-k]
-        del dx2
-        #print "Starting resource"
-        #with dx[ix] as dx2: # will this work better than 'del'?
-        #    maxd = dx2[-k]
-        #    print "Done with resource"
-        dx[dx>maxd] =0
+        #ix = dx.argsort()
+        #dx2 = dx[ix] # fancy indexing returns a copy :(
+        #maxd = dx2[-k]
+        #del dx2        
+        #dx[dx>maxd] =0
         
         unq_dx = np.unique(dx)
         unq_dx.sort()
@@ -219,7 +228,11 @@ to allow early stopping.""")
             if i==j:
                 continue
             if divisive:
-                g.remove_edge(i,j)
+                try:
+                    g.remove_edge(i,j)
+                except Exception, e:
+                    #print e
+                    pass
             else:
                 g.add_edge(i,j)
         clust  = [c for c in nx.connected_components(g)]
@@ -292,8 +305,8 @@ if __name__ == '__main__':
     iris = datasets.load_iris()
     X = iris.data
     df = pd.DataFrame(X)
-    #res = hclust_outliers(X)
-    res = hclust_outliers(X, divisive=False, maximal_clustering=True, early_stop=False)
+    res = hclust_outliers(X,divisive=True, maximal_clustering=False, early_stop=False)
+    #res = hclust_outliers(X, divisive=False, maximal_clustering=True, early_stop=False)
 
     #print res['scores']
     print res['maximal_assignment']['outliers']
