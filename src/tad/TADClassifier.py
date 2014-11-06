@@ -98,16 +98,20 @@ def flag_anomalies(g, min_pts_bgnd, node_colors={'anomalies':'r', 'background':'
     outliers = []
     for c in nx.connected_components(g):
         if len(c) < min_pts_bgnd:
-            outliers.extend(c)
+            #outliers.extend(c)
+            outliers.append(c) # maintain clustering
     return outliers
 
 def calculate_anomaly_scores(outliers, adj, n):
-    inliers = np.setdiff1d( range(n), outliers)    
-    m = n - len(outliers) # is this faster than len(inliers) ?
-    scores = []
-    for outl in outliers:        
-        ix = condensed_index_from_row_col(n, np.repeat(outl, m), inliers)        
-        scores.append(adj[ix.astype(int)].min())
+    outliers_flat = [outl for cluster in outliers for outl in cluster]
+    inliers = np.setdiff1d( range(n), outliers_flat)    
+    #m = n - len(outliers) # is this faster than len(inliers) ?
+    m = len(inliers)
+    scores = {}
+    for outl in outliers_flat:
+            ix = condensed_index_from_row_col(n, np.repeat(outl, m), inliers)        
+            #scores.append(adj[ix.astype(int)].min())
+            scores[outl] = adj[ix.astype(int)].min()
     return scores
 
 def tad_classify(X, method='euclidean', r=None, rq=.1, p=.1, distances=None):
