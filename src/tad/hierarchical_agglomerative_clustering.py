@@ -225,6 +225,8 @@ to allow early stopping.""")
     for d in unq_dx :
         r = d
         block = zip(*row_col_from_condensed_index(n, np.where(dx==d)[0]))
+        if not divisive:
+            different_clusters = False
         for i,j in block:
             if i==j:
                 continue
@@ -235,6 +237,8 @@ to allow early stopping.""")
                     #print e
                     pass
             else:
+                if not nx.has_path(g, i,j):
+                    different_clusters = True
                 g.add_edge(i,j)
         # test that the number of clusters has changed as we update graph resolution
         if divisive:
@@ -242,15 +246,11 @@ to allow early stopping.""")
             for i,j in block:
                 if not nx.has_path(g, i,j):
                     different_clusters = True
-                    clust  = [c for c in nx.connected_components(g)]
-                    nclust = len(clust)
                     break
-        else:
-            clust  = [c for c in nx.connected_components(g)]
-            nclust = len(clust)
-            different_clusters = last_clust != nclust
             
         if different_clusters: 
+            clust  = [c for c in nx.connected_components(g)]
+            nclust = len(clust)
             #r_nclust.append([r, nclust])
             last_clust = nclust
             k+=1
@@ -299,9 +299,9 @@ to allow early stopping.""")
                 ix = ix-1
                 break
         maximal_assignment = outlier_objs[ix]
-        if score:
-            maximal_assignment['scores'] = calculate_anomaly_scores(maximal_assignment['outliers'] , dx, n)
-        outlier_objs.reverse()
+    if score:
+        maximal_assignment['scores'] = calculate_anomaly_scores(maximal_assignment['outliers'] , dx, n)
+    outlier_objs.reverse()
     
     return {'assignments':assignments, 'distances':dx, 'outliers':outlier_objs, 'graph':g, 'count_n0_vs_r':count_n0_vs_r, 'r_nclust':r_nclust, 'maximal_assignment':maximal_assignment}
     
