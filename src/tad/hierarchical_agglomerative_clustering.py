@@ -224,7 +224,8 @@ to allow early stopping.""")
     outlier_count = 0
     for d in unq_dx :
         r = d
-        for i,j in zip(*row_col_from_condensed_index(n, np.where(dx==d)[0])):
+        block = zip(*row_col_from_condensed_index(n, np.where(dx==d)[0]))
+        for i,j in block:
             if i==j:
                 continue
             if divisive:
@@ -235,9 +236,21 @@ to allow early stopping.""")
                     pass
             else:
                 g.add_edge(i,j)
-        clust  = [c for c in nx.connected_components(g)]
-        nclust = len(clust)
-        if last_clust != nclust: # test that the number of clusters has changed as we update graph resolution
+        # test that the number of clusters has changed as we update graph resolution
+        if divisive:
+            different_clusters = False
+            for i,j in block:
+                if not nx.has_path(g, i,j):
+                    different_clusters = True
+                    clust  = [c for c in nx.connected_components(g)]
+                    nclust = len(clust)
+                    break
+        else:
+            clust  = [c for c in nx.connected_components(g)]
+            nclust = len(clust)
+            different_clusters = last_clust != nclust
+            
+        if different_clusters: 
             #r_nclust.append([r, nclust])
             last_clust = nclust
             k+=1
