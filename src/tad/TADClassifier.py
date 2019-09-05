@@ -4,161 +4,99 @@ Topological Anomaly Detection per Gartley and Basener (2009):
     http://www.cis.rit.edu/~mxgpci/pubs/gartley-7334-1.pdf
     
 Author: David Marx
-Date: 8/3/2014
-Version: 0.1
+Date: 9/5/2019
+Version: 0.2
 License: BSD-3
 """
 
-from __future__ import division
+from sklearn.neighbors import BallTree, radius_neighbors_graph
+from scipy.sparse.csgraph import connected_components
+from scipy.sparse import coo_matrix
 import numpy as np
-from scipy.spatial.distance import pdist
-from itertools import combinations
-import networkx as nx
-import pandas as pd
+from sklearn.base import BaseEstimator, OutlierMixin, ClusterMixin
 
-def trim_adjacency_matrix(adj, r=None, rq=.1):
-    """
-    Given a condensed distance matrix (i.e. of the kind outputted by pdist), 
-    returns a copy of the distance matrix where all entries greater than 'r'
-    are set to zero. If 'r' is not provided, evaluates the 'rq' quantile of the
-    input distances and uses that as a heuristic for 'r'. Default behavior is
-    to use the 10th percentile of distances as 'r'.
-    """
-    if r is None:
-        r = np.percentile(adj, 100*rq)
-    print "r:", r
-    adj2 = adj.copy()
-    adj2[adj>r] = 0 
-    return adj2, r
 
-def construct_graph(edges, n):
-    """
-    Constructs a networkx.Graph from a condensed distance matrix (as an
-    adjacency matrix).
-    """
-    g = nx.Graph()
-    g.add_nodes_from(range(n))
-    for z, ij in enumerate(combinations(range(n),2)):
-        d = edges[z]
-        if d:
-            i,j = ij
-            g.add_edge(i,j, weight=d) # I don't think we need the weight for anything...
-    return g
+class TADClassifier(BaseEstimator, OutlierMixin, ClusterMixin):
+    # Deprecated the rq parameter in favor of not calculating all pairwise distances.
+    # Constructing a BallTree instead, should facilitate exploring a range of radius values
+        
+    def fit(self, X, *args, **kwargs):
+        self.X_ = X
+        self.X_tree_ = BallTree(X, *args, **kwargs)
+        return self
     
+    def predict(self, X=None, radius=None, q=.1, return_scores=False, *args, **kwargs):
+        if X is None or X is self.X_:
+            X = self.X_tree_
+        else:
+            self.fit(X)
+            X = self.X_tree_
 
-def row_col_from_condensed_index(n,ix):
-    b = 1 -2*n
-    x = np.floor((-b - np.sqrt(b**2 - 8*ix))/2)
-    y = ix + x*(b + x + 2)/2 + 1
-    return (x,y)  
-    
-def condensed_index_from_row_col(n,i,j):
-    # i is always the smaller index... or doesn't it make a difference? I think it doesn't make a difference.
-    ix1 = i>j
-    #ix2 = i>j
-    ix2 = np.logical_not(ix1)
-    i1, j1 = i[ix1], j[ix1]
-    i2, j2 = j[ix2], i[ix2]
-    i = np.hstack([i1,i2])
-    j = np.hstack([j1,j2])
-    return n*j - j*(j+1)/2 + i - 1 - j
-    
-def construct_constrained_graph(adj, r, n):
-    """
-    given an adjacency matrix adj in the form of a condensed distance matrix
-    (of the kind returned by pdist) for n observations, returns the similarity
-    graph for all distances less than or equal to r.
-    """
-    ij = row_col_from_condensed_index(n, np.where(adj<=r)[0])
-    g = nx.from_edgelist(zip(*ij))
-    g.add_nodes_from(range(n))
-    return g
-    
-def flag_anomalies(g, min_pts_bgnd, node_colors={'anomalies':'r', 'background':'b'}):
-    """
-    Given an input graph, extracts the connected components of the graph and 
-    flags all observations in components with fewer than a threshold number of 
-    nodes (min_pts_bgnd) as anomalies. A "class" attribute is added to the 
-    graph to indicate if an observation is background or anomalous, and a dict
-    is also returned whose keys are the class labels "anomalies" and 
-    "background" and whose values are lists of observation indices. 
-    
-    Inputs:
-        g: a graph
-        min_pts_bgnd: min number of points for a component to be considered 
-                      background
-     
-    Returns:
-        res: a dict keyed to two lists, one for anomalies and one for 
-             background.
-        g:   The input graph with a "class" attribute added to nodes to indicate
-             whether or not they are anomalous
-     """
-    print "min_pts_bgnd:", min_pts_bgnd
-    outliers = []
-    for c in nx.connected_components(g):
-        if len(c) < min_pts_bgnd:
-            #outliers.extend(c)
-            outliers.append(c) # maintain clustering
-    return outliers
+        # These 4 lines comprise the entire algorithm. Everything else is aesthetic.
+        self.g_ = radius_neighbors_graph(X, radius=radius, *args, **kwargs)
+        _, cc = connected_components(self.g_)
+        perc_obs_cc = np.bincount(cc) / len(cc)
+        anomalous_components = np.where(perc_obs_cc<q)[0]
 
-def calculate_anomaly_scores(outliers, adj, n):
-    outliers_flat = [outl for cluster in outliers for outl in cluster]
-    inliers = np.setdiff1d( range(n), outliers_flat)    
-    #m = n - len(outliers) # is this faster than len(inliers) ?
-    m = len(inliers)
-    scores = {}
-    for outl in outliers_flat:
-            ix = condensed_index_from_row_col(n, np.repeat(outl, m), inliers)        
-            #scores.append(adj[ix.astype(int)].min())
-            scores[outl] = adj[ix.astype(int)].min()
-    return scores
-
-def tad_classify(X, method='euclidean', r=None, rq=.1, p=.1, distances=None):
-    """
-    Performs TAD classification over the input data X
+        # There's probably a cleaner way to do this via numpy/scipy.
+        self.anomalous_clusters_ = [np.where(cc == comp_idx)[0] for comp_idx in anomalous_components]
+        
+        # Use the .labels_ attribute to group outliers. Per sklearn convention, inliers are assigned the label "1"
+        inliers = np.logical_not(np.isin(cc, anomalous_components))
+        self.labels_ = -cc
+        self.labels_[inliers] = 1
+        
+        return self.labels_
     
-    Inputs:
-        X: A 2d numpy array or pandas DataFrame with observations on the rows 
-            and features on the columns.
-        method: The method to be used by scipy.spatial.distance.pdist to 
-            calculate inter-observation distances. See the pdist documentation
-            for supported values. Default's to 'euclidean'.
-        r: The "graph resolution." The paper gives no advice here, so I'm just
-            going to use the 10% percentile of observed distances
-        rq: The a percentile to be used as a heuristic to determine 'r' if 'r' 
-            is not specified. Defaults to .1
-        p: Min percentage of points necessary for a component to be considered 
-            "background" (default=10%).
-        distances: An input (condensed) distance matrix. If none is provided, 
-            a distance matrix will be calculated in accordance with the 
-            provided 'method' parameter.
+    def fit_predict(self, X, y=None, *args, **kwargs):
+        return self.fit(X).predict(*args, **kwargs)
     
-    Returns a dict with the following keys:
-        classed: A dict keyed to two lists of observations: "anomalies" and 
-            "background".
-        g: The graph of the data used by the algorithm, with observations
-            flagged as "anomaly" or "background" in the node "class" attribute.
-        scores: A pd.Series giving the "anomaly score" for each anomalous
-            observation, calculated as the distance from the observation to the
-            nearest "background" observation.
-        r: The graph resolution. If this was not provided as an input, it is 
-           calculated from the 'rq' parameter as described above.
-        min_pts_bgnd: The minimum number of points required for a connected 
-            component to be considered as "background." Calculated as n*p
-            where 'n' is the total number of observations.
-        distances: A condensed distance matrix giving all inter-observation
-            distances (unfiltered by trim_adjacency_matrix). 
-    """
-    # Maintain original matrix for calculating anomaly score
-    if not distances:
-        adj = pdist(X, method)
-    if r is None:
-        r = np.percentile(adj, 100*rq)
-    n = X.shape[0]
-    g = construct_constrained_graph(adj, r, n)
-    outliers =  flag_anomalies(g, n*p)
-    print "outliers"
-    print outliers
-    scores = calculate_anomaly_scores(outliers, adj, n)
-    return {'outliers':outliers, 'g':g, 'scores':scores, 'r':r, 'min_pts_bgnd':n*p, 'distances':adj}
+    @property
+    def outliers_(self):
+        return np.where(self.labels_ < 1)[0]
+    
+    @property
+    def inliers_(self):
+        return np.where(self.labels_ > 0)[0]
+    
+    def score(self, X=None, y=None):
+        """X and y ignored."""
+        scores = [self._outlier_scores(cluster) for cluster in self.anomalous_clusters_]
+        scores_flat = self._flatten_scores(scores)
+        sp_scores = self._dict_to_vect(scores_flat, len(self.X_))
+        return sp_scores
+    
+    def _outlier_scores(self, cluster):
+        """
+        Calculates the distance from each outlier to its nearest inlier.
+        Results are returned in the same cluster groups as the input.
+        """
+        outliers = self.X_.values[cluster,:]
+        d,i = self.X_tree_.query(outliers,k=len(outliers)+1)
+        
+        # Need to handle cases that have multiple inlier neighbors
+        d[np.isin(i, cluster)] = d.max()*2
+        scores = d.min(axis=1)
+        return scores
+    
+    def _flatten_scores(self, scores_in):
+        """
+        Given a collection of outlier scores grouped into their respective clusters, 
+        pairs each score with the index of its associated observation. 
+        Returns a dict of {observationIndex:outlierScore}.
+        """
+        scores = {}
+        for idx, score in zip(self.anomalous_clusters_, scores_in):
+            scores.update(dict(zip(idx,score)))
+        return scores
+    
+    def _dict_to_vect(self, d, n):
+        """
+        Given a dict of integer keys and float values, returns an N x 1 sparse vector (COO)
+        whose indexes are the dict keys and whose values match the dict values.
+        """
+        row = list(d.keys())
+        col = np.zeros(len(row))
+        data = list(d.values())
+        sp_scores = coo_matrix((data, (row, col)), shape=(n, 1))
+        return sp_scores
